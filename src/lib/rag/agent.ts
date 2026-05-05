@@ -12,7 +12,7 @@ const AgentState = Annotation.Root({
     return [...a, ...b.filter(c => !existingIds.has(c.chunk_id))];
   }, default: () => [] }),
   lastValidation: Annotation<ValidationResult | null>({ reducer: (_, b) => b, default: () => null }),
-  attempts: Annotation<number>({ reducer: (a, b) => a + (b || 1), default: () => 0 }),
+  attempts: Annotation<number>({ reducer: (a, b) => a + b, default: () => 0 }),
   maxRetries: Annotation<number>(),
   documentId: Annotation<string | undefined>({ reducer: (_, b) => b, default: () => undefined }),
   trace: Annotation<TraceStep[]>({ reducer: (a, b) => a.concat(b), default: () => [] }),
@@ -96,9 +96,13 @@ const answerNode = async (state: typeof AgentState.State) => {
   const model = getModel();
   const context = state.chunks.map(c => `[${c.chunk_id}] (Doc: ${c.document_id}): ${c.text}`).join("\n\n");
   
+  const validationNote = state.lastValidation && !state.lastValidation.sufficient 
+    ? `\n\nValidation Note: The retrieval system flagged the following potential gaps in context: "${state.lastValidation.missing_info}". \nIf this missing info is crucial, caveat your answer and assign a "medium" or "low" confidence score.` 
+    : "";
+
   const prompt = `Answer the user's question using ONLY the provided document chunks. 
 Cite your sources by including the chunk_id in brackets like [doc_c1].
-Distinguish between directly supported facts, reasonable inferences, and missing information.
+Distinguish between directly supported facts, reasonable inferences, and missing information.${validationNote}
 
 Question: ${state.question}
 

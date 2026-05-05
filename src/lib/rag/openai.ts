@@ -29,7 +29,7 @@ export const getBatchEmbeddings = async (texts: string[]) => {
   return response.data.map((emb) => emb.embedding);
 };
 
-export const getModel = (modelName: string = "gpt-4o-mini") => {
+export const getModel = (modelName: string = "gpt-5.4-mini") => {
   const client = getOpenAI();
 
   return {
