@@ -1,6 +1,6 @@
 # Agentic NDA RAG System
 
-An intelligent PDF retrieval and reasoning system specialized for NDA (Non-Disclosure Agreement) documents. Built with Gemini 2.0 Flash and LangGraph for high-fidelity extraction and self-correcting retrieval.
+An intelligent PDF retrieval and reasoning system specialized for NDA (Non-Disclosure Agreement) documents. Built with GPT-5.4 Mini and LangGraph for high-fidelity extraction and self-correcting retrieval.
 
 ## Architecture Overview
 

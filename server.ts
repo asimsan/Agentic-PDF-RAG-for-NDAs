@@ -4,7 +4,7 @@ import path from "path";
 import cors from "cors";
 import { fileURLToPath } from "url";
 import * as dotenv from 'dotenv';
-import { ragRouter } from "./server/routes.js";
+import { ragRouter } from "./server/routes.ts";
 
 dotenv.config();
 
@@ -23,11 +23,17 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+    try {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+      console.log("Vite middleware integrated");
+    } catch (e) {
+      console.warn("Failed to load Vite middleware, running API only mode:", e);
+      console.info("Please run 'npx vite' in a separate terminal for the frontend.");
+    }
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));

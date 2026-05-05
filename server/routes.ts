@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { ingestDocuments, getIngestionStatus, ALL_URLS } from "../src/lib/rag/ingestion.js";
-import { askQuestion } from "../src/lib/rag/agent.js";
-import { vectorStore } from "../src/lib/rag/store.js";
+import { ingestDocuments, getIngestionStatus, ALL_URLS } from "../src/lib/rag/ingestion.ts";
+import { askQuestion } from "../src/lib/rag/agent.ts";
+import { vectorStore } from "../src/lib/rag/store.ts";
 
 export const ragRouter = Router();
 

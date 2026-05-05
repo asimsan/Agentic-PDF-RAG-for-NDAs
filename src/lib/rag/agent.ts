@@ -54,8 +54,8 @@ Respond in JSON format:
   "reasoning": "your reasoning"
 }`;
 
-  const result = await model.generate(prompt);
-  const jsonStr = result[0].content[0].text.replace(/```json|```/g, "").trim();
+  const responseText = await model.generate(prompt);
+  const jsonStr = responseText.replace(/```json|```/g, "").trim();
   const validation: ValidationResult = JSON.parse(jsonStr);
 
   const step: TraceStep = {
@@ -78,8 +78,7 @@ NDA documents often use specific legal terminology.
 
 Respond with JUST the rewritten query.`;
 
-  const result = await model.generate(prompt);
-  const rewrittenQuery = result[0].content[0].text().trim();
+  const rewrittenQuery = await model.generate(prompt);
 
   const step: TraceStep = {
     step: state.trace.length + 1,
@@ -119,8 +118,8 @@ Respond in JSON format:
   ]
 }`;
 
-  const result = await model.generate(prompt);
-  const jsonStr = result[0].content[0].text().replace(/```json|```/g, "").trim();
+  const responseText = await model.generate(prompt);
+  const jsonStr = responseText.replace(/```json|```/g, "").trim();
   const rawAnswer = JSON.parse(jsonStr);
 
   const finalAnswer: AnswerPayload = {

@@ -33,4 +33,4 @@ To resolve this entirely without throttling the ingestion pipeline artificially,
 
 1. **New Dependency:** Added the `openai` SDK.
 2. **Environment Variable:** Added `OPENAI_API_KEY` to `.env.example`.
-3. **Refactor:** Updated `src/lib/rag/gemini.ts` so `getEmbeddings` and `getBatchEmbeddings` interact with OpenAI's API instead of Gemini, offloading embedding tasks while still retaining Gemini for high-level language parsing and generation (`gemini-3.0-flash`).
+3. **Refactor:** Updated `src/lib/rag/gemini.ts` so `getEmbeddings` and `getBatchEmbeddings` interact with OpenAI's API instead of Gemini, offloading embedding tasks while still retaining the OpenAI SDK for high-level language parsing and generation (`gpt-5.4-mini`).
