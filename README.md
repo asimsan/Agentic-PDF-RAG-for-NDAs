@@ -44,7 +44,7 @@ The system doesn't just search once. It performs a **multi-pass loop**:
 
 ## Setup Instructions
 
-1.  Provide your `OPEN_AI_KEY` in the secrets/environment.
+1.  Provide your `OPENAI_API_KEY` in the secrets/environment.
 2.  Run `npm run dev` to start the server.
 3.  Click "Trigger Sample Ingestion" in the UI to load documents into the memory store.
 4.  Ask questions!
