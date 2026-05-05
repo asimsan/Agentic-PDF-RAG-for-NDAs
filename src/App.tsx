@@ -158,7 +158,7 @@ export default function App() {
           <div className="mt-auto pt-6 border-t border-[#262626]">
             <div className="p-4 bg-[#1A1A1A] border border-[#262626] rounded-lg">
               <div className="text-[10px] text-[#737373] uppercase mb-1 tracking-wider">Embedding Engine</div>
-              <div className="text-xs font-mono text-[#A3A3A3]">gemini-embedding-2</div>
+              <div className="text-xs font-mono text-[#A3A3A3]">text-embedding-3-small</div>
             </div>
             {docs.length === 0 && (
               <div className="mt-4">

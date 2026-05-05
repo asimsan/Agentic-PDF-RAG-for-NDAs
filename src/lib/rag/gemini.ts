@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 
 let genAI: GoogleGenerativeAI | null = null;
+let openaiClient: OpenAI | null = null;
 
 function getGenAI() {
   if (!genAI) {
@@ -13,19 +15,41 @@ function getGenAI() {
   return genAI;
 }
 
+function getOpenAI() {
+  if (!openaiClient) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENAI_API_KEY environment variable not set");
+    }
+    openaiClient = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
+  }
+  return openaiClient;
+}
+
 export const getEmbeddings = async (text: string) => {
-  const model = getGenAI().getGenerativeModel({ model: "gemini-embedding-2" });
-  const result = await model.embedContent(text);
-  return result.embedding.values;
+  const response = await getOpenAI().embeddings.create({
+    model: "text-embedding-3-small",
+    input: text,
+  });
+  return response.data[0].embedding;
 };
 
 export const getBatchEmbeddings = async (texts: string[]) => {
-  const model = getGenAI().getGenerativeModel({ model: "gemini-embedding-2" });
-  const requests = texts.map((text) => ({ content: { parts: [{ text }] } }));
-  const result = await model.batchEmbedContents({ requests });
-  return result.embeddings.map((emb) => emb.values);
+  const response = await getOpenAI().embeddings.create({
+    model: "text-embedding-3-small",
+    input: texts,
+  });
+  return response.data.map((emb) => emb.embedding);
 };
 
-export const getModel = (modelName: string = "gemini-2.0-flash") => {
-  return getGenAI().getGenerativeModel({ model: modelName });
+export const getModel = (modelName: string = "gpt-5.4-mini") => {
+  const client = getOpenAI();
+
+  return {
+    generate: (input: string) =>
+      client.responses.create({
+        model: modelName,
+        input,
+      }),
+  };
 };

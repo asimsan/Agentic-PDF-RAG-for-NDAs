@@ -24,4 +24,13 @@ await new Promise(r => setTimeout(r, 2000));
 ```
 
 ## Summary
-By combining **Batching** (drastically reducing the total number of API calls) with **Throttling** (pacing the remaining calls), the ingestion pipeline is now smooth, scalable, and completely resilient against free-tier quota exhaustion.
+By combining **Batching** (drastically reducing the total number of API calls) with **Throttling** (pacing the remaining calls), the ingestion pipeline was initially designed to be resilient against free-tier quota exhaustion.
+
+## Further Mitigation (Update)
+Even with strict batching, processing a large number of NDA documents rapidly back-to-back ultimately exceeded the Gemini API free-tier quotas. 
+
+To resolve this entirely without throttling the ingestion pipeline artificially, we have **migrated the embedding engine to OpenAI's `text-embedding-3-small`**. 
+
+1. **New Dependency:** Added the `openai` SDK.
+2. **Environment Variable:** Added `OPENAI_API_KEY` to `.env.example`.
+3. **Refactor:** Updated `src/lib/rag/gemini.ts` so `getEmbeddings` and `getBatchEmbeddings` interact with OpenAI's API instead of Gemini, offloading embedding tasks while still retaining Gemini for high-level language parsing and generation (`gemini-3.0-flash`).
