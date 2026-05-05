@@ -1,0 +1,6 @@
+{
+  "name": "Agentic NDA RAG",
+  "description": "An agentic PDF RAG system for analyzing NDA documents with self-correction and source citation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
