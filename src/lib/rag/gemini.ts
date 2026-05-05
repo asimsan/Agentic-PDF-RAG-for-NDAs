@@ -19,6 +19,13 @@ export const getEmbeddings = async (text: string) => {
   return result.embedding.values;
 };
 
+export const getBatchEmbeddings = async (texts: string[]) => {
+  const model = getGenAI().getGenerativeModel({ model: "gemini-embedding-2" });
+  const requests = texts.map((text) => ({ content: { parts: [{ text }] } }));
+  const result = await model.batchEmbedContents({ requests });
+  return result.embeddings.map((emb) => emb.values);
+};
+
 export const getModel = (modelName: string = "gemini-2.0-flash") => {
   return getGenAI().getGenerativeModel({ model: modelName });
 };

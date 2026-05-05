@@ -1,7 +1,7 @@
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pdf = require('pdf-parse');
-import { getEmbeddings } from "./gemini.js";
+import { getEmbeddings, getBatchEmbeddings } from "./gemini.js";
 import { vectorStore } from "./store.js";
 import { Chunk, IngestionStatus } from "./types.js";
 
@@ -114,22 +114,34 @@ export async function ingestDocuments(urls: string[] = ALL_URLS) {
       const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 30);
       
       const newChunks: Chunk[] = [];
-      for (let i = 0; i < paragraphs.length; i++) {
-        const pText = paragraphs[i].trim();
-        try {
-          const embedding = await getEmbeddings(pText);
-          newChunks.push({
-            chunk_id: `${docId}_c${i}`,
-            document_id: docId,
-            page: 1, // pdf-parse doesn't easily give page numbers for chunks without more complex logic
-            text: pText,
-            metadata: { url },
-            embedding
-          });
-        } catch (embedError) {
-          console.error("Embedding failed for chunk:", pText.substring(0, 50), embedError);
-          throw embedError;
+      try {
+        const batchSize = 100;
+        for (let b = 0; b < paragraphs.length; b += batchSize) {
+          const batch = paragraphs.slice(b, b + batchSize);
+          const batchTexts = batch.map(p => p.trim());
+          
+          try {
+            const embeddings = await getBatchEmbeddings(batchTexts);
+            for (let i = 0; i < batch.length; i++) {
+              newChunks.push({
+                chunk_id: `${docId}_c${b + i}`,
+                document_id: docId,
+                page: 1, // pdf-parse doesn't easily give page numbers for chunks without more complex logic
+                text: batchTexts[i],
+                metadata: { url },
+                embedding: embeddings[i]
+              });
+            }
+          } catch (embedError) {
+            console.error("Embedding failed for batch starting at:", b, embedError);
+            throw embedError;
+          }
+          
+          // Throttling: Wait 2 seconds between batches to avoid 100 RPM free tier limits across multiple docs/batches
+          await new Promise(r => setTimeout(r, 2000));
         }
+      } catch (error) {
+        throw error;
       }
 
       vectorStore.addChunks(newChunks);
