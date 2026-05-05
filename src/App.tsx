@@ -20,6 +20,7 @@ interface ChatMessage {
 interface Thread {
   id: string;
   name: string;
+  documentId?: string;
   messages: ChatMessage[];
   activeMessageId: string | null;
 }
@@ -43,7 +44,7 @@ export default function App() {
   useEffect(() => {
     if (threads.length === 0) {
       const id = Math.random().toString(36).substring(7);
-      setThreads([{ id, name: 'New Conversation', messages: [], activeMessageId: null }]);
+      setThreads([{ id, name: 'New Conversation', documentId: undefined, messages: [], activeMessageId: null }]);
       setActiveThreadId(id);
     }
   }, []);
@@ -90,7 +91,7 @@ export default function App() {
 
   const handleNewThread = () => {
     const id = Math.random().toString(36).substring(7);
-    setThreads(prev => [...prev, { id, name: 'New Conversation', messages: [], activeMessageId: null }]);
+    setThreads(prev => [...prev, { id, name: 'New Conversation', documentId: undefined, messages: [], activeMessageId: null }]);
     setActiveThreadId(id);
     setActiveTab('ask');
   };
@@ -142,7 +143,7 @@ export default function App() {
       const res = await fetch('/api/rag/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: newQuestion })
+        body: JSON.stringify({ question: newQuestion, documentId: activeThread?.documentId })
       });
       const data = await res.json();
       
@@ -472,7 +473,22 @@ export default function App() {
           </AnimatePresence>
 
           {/* Input Area */}
-          <div className="mt-auto pt-4 max-w-3xl mx-auto w-full">
+          <div className="mt-auto pt-4 max-w-3xl mx-auto w-full flex flex-col gap-2">
+            <div className="flex justify-end">
+              <select 
+                value={activeThread?.documentId || ""} 
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, documentId: val === "" ? undefined : val } : t));
+                }}
+                className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:border-blue-500 max-w-[250px] truncate shadow-sm transition-all"
+              >
+                <option value="">Search: All Documents</option>
+                {docs.map(d => (
+                  <option key={d.id} value={d.id}>Search: {d.id}</option>
+                ))}
+              </select>
+            </div>
             <form onSubmit={handleAsk} className="relative flex items-center">
               <input 
                 type="text"

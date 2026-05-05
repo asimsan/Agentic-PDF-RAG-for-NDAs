@@ -26,9 +26,9 @@ ragRouter.post("/ingest", async (req, res) => {
 });
 
 ragRouter.post("/ask", async (req, res) => {
-  const { question, maxRetries } = req.body;
+  const { question, maxRetries, documentId } = req.body;
   try {
-    const answer = await askQuestion(question, maxRetries);
+    const answer = await askQuestion(question, maxRetries, documentId);
     res.json(answer);
   } catch (error) {
     console.error("Ask error:", error);

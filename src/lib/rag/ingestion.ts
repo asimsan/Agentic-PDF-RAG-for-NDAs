@@ -1,7 +1,7 @@
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pdf = require('pdf-parse');
-import { getEmbeddings, getBatchEmbeddings } from "./gemini.js";
+import { getEmbeddings, getBatchEmbeddings } from "./openai.js";
 import { vectorStore } from "./store.js";
 import { Chunk, IngestionStatus } from "./types.js";
 
@@ -109,17 +109,17 @@ export async function ingestDocuments(urls: string[] = ALL_URLS) {
         text = MOCK_NDA_TEXT;
         docId = 'Mock_NDA_001.pdf';
       }
-      
+
       // Basic chunking by paragraph (or fixed length)
       const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 30);
-      
+
       const newChunks: Chunk[] = [];
       try {
         const batchSize = 100;
         for (let b = 0; b < paragraphs.length; b += batchSize) {
           const batch = paragraphs.slice(b, b + batchSize);
           const batchTexts = batch.map(p => p.trim());
-          
+
           try {
             const embeddings = await getBatchEmbeddings(batchTexts);
             for (let i = 0; i < batch.length; i++) {
@@ -136,9 +136,9 @@ export async function ingestDocuments(urls: string[] = ALL_URLS) {
             console.error("Embedding failed for batch starting at:", b, embedError);
             throw embedError;
           }
-          
-          // Throttling: Wait 2 seconds between batches to avoid 100 RPM free tier limits across multiple docs/batches
-          await new Promise(r => setTimeout(r, 2000));
+
+          // Throttling: Wait 0.5 second between batches to avoid 100 RPM free tier limits across multiple docs/batches
+          await new Promise(r => setTimeout(r, 500));
         }
       } catch (error) {
         throw error;

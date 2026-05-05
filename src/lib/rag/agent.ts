@@ -1,5 +1,5 @@
 import { StateGraph, Annotation, END, START } from "@langchain/langgraph";
-import { getEmbeddings, getModel } from "./gemini.js";
+import { getEmbeddings, getModel } from "./openai.js";
 import { vectorStore } from "./store.js";
 import { AnswerPayload, RetrievedChunk, TraceStep, ValidationResult } from "./types.js";
 
@@ -14,6 +14,7 @@ const AgentState = Annotation.Root({
   lastValidation: Annotation<ValidationResult | null>({ reducer: (_, b) => b, default: () => null }),
   attempts: Annotation<number>({ reducer: (a, b) => a + (b || 1), default: () => 0 }),
   maxRetries: Annotation<number>(),
+  documentId: Annotation<string | undefined>({ reducer: (_, b) => b, default: () => undefined }),
   trace: Annotation<TraceStep[]>({ reducer: (a, b) => a.concat(b), default: () => [] }),
   answer: Annotation<AnswerPayload | null>({ reducer: (_, b) => b, default: () => null }),
 });
@@ -22,13 +23,13 @@ const AgentState = Annotation.Root({
 const retrieveNode = async (state: typeof AgentState.State) => {
   const query = state.queries[state.queries.length - 1];
   const embedding = await getEmbeddings(query);
-  const results = await vectorStore.search(embedding);
+  const results = await vectorStore.search(embedding, 8, state.documentId);
   
   const step: TraceStep = {
     step: state.trace.length + 1,
     action: "retrieve",
     input: query,
-    result: `Found ${results.length} chunks`
+    result: `Found ${results.length} chunks` + (state.documentId ? ` in doc ${state.documentId}` : "")
   };
 
   return { chunks: results, trace: [step], attempts: 1 };
@@ -150,9 +151,10 @@ const workflow = new StateGraph(AgentState)
 
 export const app = workflow.compile();
 
-export async function askQuestion(question: string, maxRetries: number = 2) {
+export async function askQuestion(question: string, maxRetries: number = 2, documentId?: string) {
   const initialState = {
     question,
+    documentId,
     queries: [question],
     maxRetries,
     attempts: 0,

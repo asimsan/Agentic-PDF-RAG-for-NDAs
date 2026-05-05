@@ -23,9 +23,9 @@ export class SimpleVectorStore {
     return this.chunks;
   }
 
-  async search(queryEmbedding: number[], topK: number = 8): Promise<RetrievedChunk[]> {
+  async search(queryEmbedding: number[], topK: number = 8, documentId?: string): Promise<RetrievedChunk[]> {
     const scored = this.chunks
-      .filter(c => c.embedding)
+      .filter(c => c.embedding && (!documentId || c.document_id === documentId))
       .map(chunk => ({
         ...chunk,
         score: cosineSimilarity(queryEmbedding, chunk.embedding!)
