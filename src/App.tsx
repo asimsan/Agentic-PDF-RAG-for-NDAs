@@ -34,6 +34,7 @@ export default function App() {
   const [docs, setDocs] = useState<{id: string, chunks: number}[]>([]);
   const [chunks, setChunks] = useState<any[]>([]);
   const [sampleCount, setSampleCount] = useState(20);
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const activeThread = threads.find(t => t.id === activeThreadId);
@@ -58,10 +59,14 @@ export default function App() {
   // Refresh status and docs
   const refreshData = async () => {
     try {
+      const chunksUrl = selectedDocId 
+        ? `/api/rag/chunks?documentId=${encodeURIComponent(selectedDocId)}`
+        : '/api/rag/chunks';
+
       const [statusRes, docsRes, chunksRes] = await Promise.all([
         fetch('/api/rag/status'),
         fetch('/api/rag/documents'),
-        fetch('/api/rag/chunks')
+        fetch(chunksUrl)
       ]);
       const statusData = await statusRes.json();
       const docsData = await docsRes.json();
@@ -78,7 +83,7 @@ export default function App() {
     refreshData();
     const interval = setInterval(refreshData, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedDocId]);
 
   const handleIngest = async () => {
     await fetch('/api/rag/ingest', { 
@@ -444,28 +449,57 @@ export default function App() {
                   <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar">
                     <h4 className="text-sm font-semibold text-gray-700 mb-2">Ingested Documents</h4>
                     {docs.map(doc => (
-                      <div key={doc.id} className="p-3 bg-white border border-gray-200 rounded-xl flex items-center justify-between hover:border-gray-300 transition-all shadow-sm">
+                      <div 
+                        key={doc.id} 
+                        onClick={() => setSelectedDocId(doc.id === selectedDocId ? null : doc.id)}
+                        className={`p-3 border rounded-xl flex items-center justify-between hover:border-blue-300 transition-all shadow-sm cursor-pointer ${selectedDocId === doc.id ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-100' : 'bg-white border-gray-200'}`}
+                      >
                         <div className="flex items-center gap-3">
-                          <div className="p-1.5 bg-gray-50 rounded text-gray-500"><Search size={16} /></div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-900 truncate max-w-[200px]">{doc.id}</p>
+                          <div className={`p-1.5 rounded ${selectedDocId === doc.id ? 'bg-blue-100 text-blue-600' : 'bg-gray-50 text-gray-500'}`}><Search size={16} /></div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate pr-2">{doc.id}</p>
                             <p className="text-xs text-gray-500">{doc.chunks} chunks</p>
                           </div>
                         </div>
-                        <ExternalLink size={14} className="text-gray-400" />
+                        <ExternalLink size={14} className={selectedDocId === doc.id ? 'text-blue-500' : 'text-gray-400'} />
                       </div>
                     ))}
                   </div>
                   
                   <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar">
-                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Atomic Chunks</h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-semibold text-gray-700">
+                        {selectedDocId ? 'Document Chunks' : 'Global Preview (Top 20)'}
+                      </h4>
+                      {selectedDocId && (
+                        <button 
+                          onClick={() => setSelectedDocId(null)}
+                          className="text-[10px] uppercase tracking-wider font-bold text-blue-600 hover:text-blue-700"
+                        >
+                          Clear Filter
+                        </button>
+                      )}
+                    </div>
                     <div className="space-y-2">
-                      {chunks.slice(0, 10).map((c, i) => (
-                        <div key={i} className="p-3 bg-white border border-gray-200 rounded-xl text-xs text-gray-600 shadow-sm">
-                          <span className="text-gray-900 font-medium block mb-1">{c.chunk_id}</span>
-                          {c.text.slice(0, 150)}...
+                      {(selectedDocId 
+                        ? chunks.filter(c => c.document_id === selectedDocId)
+                        : chunks.slice(0, 20)
+                      ).map((c, i) => (
+                        <div key={i} className="p-4 bg-white border border-gray-200 rounded-xl text-xs text-gray-600 shadow-sm hover:shadow-md transition-shadow">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-gray-900 font-semibold px-2 py-0.5 bg-gray-100 rounded text-[10px] uppercase tracking-tight">{c.chunk_id}</span>
+                            <span className="text-[10px] text-gray-400 font-medium">Page {c.page || '1'}</span>
+                          </div>
+                          <p className="leading-relaxed">
+                            {c.text}
+                          </p>
                         </div>
                       ))}
+                      {selectedDocId && chunks.filter(c => c.document_id === selectedDocId).length === 0 && (
+                        <div className="text-center py-10 text-gray-400 italic text-sm">
+                          No chunks found for this document.
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

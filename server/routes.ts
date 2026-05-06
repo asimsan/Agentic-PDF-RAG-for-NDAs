@@ -46,5 +46,18 @@ ragRouter.get("/documents", (req, res) => {
 });
 
 ragRouter.get("/chunks", (req, res) => {
-  res.json(vectorStore.getChunks().slice(0, 50)); // Limit for UI
+  const { documentId } = req.query;
+  const allChunks = vectorStore.getChunks();
+  
+  let filtered = allChunks;
+  if (documentId) {
+    filtered = allChunks.filter(c => c.document_id === documentId);
+  } else {
+    filtered = allChunks.slice(0, 100); // Larger default preview
+  }
+
+  // Strip heavy embeddings for UI
+  const sanitized = filtered.map(({ embedding, ...rest }) => rest);
+  
+  res.json(sanitized);
 });
