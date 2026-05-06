@@ -7,10 +7,12 @@ import { AnswerPayload, RetrievedChunk, TraceStep, ValidationResult } from "./ty
 const AgentState = Annotation.Root({
   question: Annotation<string>(),
   queries: Annotation<string[]>({ reducer: (a, b) => a.concat(b), default: () => [] }),
-  chunks: Annotation<RetrievedChunk[]>({ reducer: (a, b) => {
-    const existingIds = new Set(a.map(c => c.chunk_id));
-    return [...a, ...b.filter(c => !existingIds.has(c.chunk_id))];
-  }, default: () => [] }),
+  chunks: Annotation<RetrievedChunk[]>({
+    reducer: (a, b) => {
+      const existingIds = new Set(a.map(c => c.chunk_id));
+      return [...a, ...b.filter(c => !existingIds.has(c.chunk_id))];
+    }, default: () => []
+  }),
   lastValidation: Annotation<ValidationResult | null>({ reducer: (_, b) => b, default: () => null }),
   attempts: Annotation<number>({ reducer: (a, b) => a + b, default: () => 0 }),
   maxRetries: Annotation<number>(),
@@ -24,7 +26,7 @@ const retrieveNode = async (state: typeof AgentState.State) => {
   const query = state.queries[state.queries.length - 1];
   const embedding = await getEmbeddings(query);
   const results = await vectorStore.search(embedding, 8, state.documentId);
-  
+
   const step: TraceStep = {
     step: state.trace.length + 1,
     action: "retrieve",
@@ -38,12 +40,12 @@ const retrieveNode = async (state: typeof AgentState.State) => {
 const validateNode = async (state: typeof AgentState.State) => {
   const model = getModel();
   const context = state.chunks.map(c => `[${c.chunk_id}]: ${c.text}`).join("\n\n");
-  
+
   const prompt = `You are a judge for a RAG system. 
 Analyze the provided document chunks and decide if they contain sufficient information to answer the user's question accurately.
 If not, identify what is missing.
 
-Question: ${state.question}
+Question: ${state.queries[state.queries.length - 1]}
 
 Chunks:
 ${context}
@@ -95,16 +97,16 @@ Respond with JUST the rewritten query.`;
 const answerNode = async (state: typeof AgentState.State) => {
   const model = getModel();
   const context = state.chunks.map(c => `[${c.chunk_id}] (Doc: ${c.document_id}): ${c.text}`).join("\n\n");
-  
-  const validationNote = state.lastValidation && !state.lastValidation.sufficient 
-    ? `\n\nValidation Note: The retrieval system flagged the following potential gaps in context: "${state.lastValidation.missing_info}". \nIf this missing info is crucial, caveat your answer and assign a "medium" or "low" confidence score.` 
+
+  const validationNote = state.lastValidation && !state.lastValidation.sufficient
+    ? `\n\nValidation Note: The retrieval system flagged the following potential gaps in context: "${state.lastValidation.missing_info}". \nIf this missing info is crucial, caveat your answer and assign a "medium" or "low" confidence score.`
     : "";
 
   const prompt = `Answer the user's question using ONLY the provided document chunks. 
 Cite your sources by including the chunk_id in brackets like [doc_c1].
 Distinguish between directly supported facts, reasonable inferences, and missing information.${validationNote}
 
-Question: ${state.question}
+Question: ${state.queries[state.queries.length - 1]}
 
 Chunks:
 ${context}
