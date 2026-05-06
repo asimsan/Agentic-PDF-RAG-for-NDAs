@@ -5,8 +5,24 @@ import {
   Loader2, 
   ExternalLink,
   Trash2,
+  ChevronRight, 
+  FileText, 
+  Info, 
+  ShieldCheck, 
+  Share2, 
+  Download, 
+  Copy, 
+  RotateCcw, 
+  ThumbsUp, 
+  ThumbsDown, 
+  MoreHorizontal,
+  Layers,
+  MessageSquare,
+  Sparkles
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { AnswerPayload, TraceStep, IngestionStatus } from './lib/rag/types';
 
 interface ChatMessage {
@@ -15,6 +31,7 @@ interface ChatMessage {
   answer: AnswerPayload | null;
   loading: boolean;
   error?: string;
+  uiTab?: 'answer' | 'sources';
 }
 
 interface Thread {
@@ -24,6 +41,38 @@ interface Thread {
   messages: ChatMessage[];
   activeMessageId: string | null;
 }
+
+const FormattedAnswer = ({ content, evidence }: { content: string, evidence: any[] }) => {
+  const renderContent = (text: string) => {
+    if (!text) return null;
+    const parts = text.split(/(\[[\w\.-]+\])/);
+    
+    return parts.map((part, i) => {
+      const match = part.match(/^\[([\w\.-]+)\]$/);
+      if (match) {
+        const chunkId = match[1];
+        const sourceIndex = Array.isArray(evidence) ? evidence.findIndex(e => e.chunk_id === chunkId) : -1;
+        if (sourceIndex !== -1) {
+          return (
+            <span key={i} className="citation-pill" title={evidence[sourceIndex].snippet}>
+              {sourceIndex + 1}
+            </span>
+          );
+        }
+        return <span key={i} className="text-gray-400 text-[10px]">{part}</span>;
+      }
+      return (
+        <span key={i} className="inline-markdown">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {part}
+          </ReactMarkdown>
+        </span>
+      );
+    });
+  };
+
+  return <div className="markdown-body">{renderContent(content)}</div>;
+};
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'ask' | 'docs' | 'chunks'>('ask');
@@ -41,6 +90,18 @@ export default function App() {
   const messages = activeThread?.messages || [];
   const activeMessageId = activeThread?.activeMessageId;
   const activeMessage = messages.find(m => m.id === activeMessageId) || messages[messages.length - 1];
+
+  const setMsgTab = (msgId: string, tab: 'answer' | 'sources') => {
+    setThreads(prev => prev.map(t => {
+      if (t.id === activeThreadId) {
+        return {
+          ...t,
+          messages: t.messages.map(m => m.id === msgId ? { ...m, uiTab: tab } : m)
+        };
+      }
+      return t;
+    }));
+  };
 
   useEffect(() => {
     if (threads.length === 0) {
@@ -130,7 +191,8 @@ export default function App() {
       id: messageId,
       question: newQuestion,
       answer: null,
-      loading: true
+      loading: true,
+      uiTab: 'answer'
     };
     
     setThreads(prev => prev.map(t => 
@@ -371,64 +433,102 @@ export default function App() {
                       )}
 
                       {msg.answer && (
-                        <div className="grid grid-cols-1 gap-6">
-                          {/* Answer */}
-                          <div className="flex flex-col gap-2">
-                            <div className="bg-white p-5 rounded-2xl border border-gray-200 text-sm leading-relaxed text-gray-700 shadow-sm relative overflow-hidden">
-                              <p>
-                                {typeof msg.answer.answer === 'string' && msg.answer.answer.split(' ').map((word, i) => {
-                                  const isHighlight = /year|month|day|period|duration|effective|terminate|confidentiality/i.test(word);
-                                  return (
-                                    <span key={i} className={isHighlight ? "font-semibold text-gray-900 bg-blue-50 px-0.5 rounded" : ""}>
-                                      {word}{' '}
-                                    </span>
-                                  );
-                                })}
-                              </p>
-                            </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Evidence Visualizer */}
-                            <div className="flex flex-col overflow-hidden">
-                              <h2 className="text-xs font-semibold text-gray-500 mb-2">Sources</h2>
-                              <div className="space-y-2">
-                                {Array.isArray(msg.answer.evidence) && msg.answer.evidence.map((ev, i) => (
-                                  <div key={i} className="p-3 bg-gray-50 border border-gray-200 rounded-xl hover:border-gray-300 transition-colors">
-                                    <div className="flex justify-between items-center mb-1.5">
-                                      <span className="text-xs font-medium text-gray-700">{ev.chunk_id} · Page {ev.page || '1'}</span>
-                                      <div className="px-1.5 py-0.5 bg-blue-50 rounded text-[10px] text-blue-600 font-medium">
-                                        Source
-                                      </div>
-                                    </div>
-                                    <p className="text-xs leading-relaxed text-gray-500 line-clamp-3">
-                                      "{ev.snippet}"
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                            
-                            {/* Confidence Assessment */}
-                            <div className="flex flex-col">
-                              <h2 className="text-xs font-semibold text-gray-500 mb-2">Confidence</h2>
-                              <div className="flex items-center gap-4 bg-gray-50 p-3 border border-gray-200 rounded-xl">
-                                <div className="h-1.5 flex-1 bg-gray-200 rounded-full overflow-hidden">
-                                  <motion.div 
-                                    initial={{ width: 0 }}
-                                    animate={{ width: msg.answer.confidence === 'high' ? '100%' : msg.answer.confidence === 'medium' ? '60%' : '30%' }}
-                                    className={`h-full rounded-full ${msg.answer.confidence === 'high' ? 'bg-green-500' : msg.answer.confidence === 'medium' ? 'bg-yellow-500' : 'bg-red-500'}`}
-                                  />
-                                </div>
-                                <span className={`text-sm font-medium capitalize ${msg.answer.confidence === 'high' ? 'text-green-600' : msg.answer.confidence === 'medium' ? 'text-yellow-600' : 'text-red-600'}`}>
-                                  {msg.answer.confidence}
+                        <div className="flex flex-col gap-6">
+                          {/* Tabs */}
+                          <div className="flex items-center border-b border-gray-100 mb-2">
+                            <button 
+                              onClick={() => setMsgTab(msg.id, 'answer')}
+                              className={`tab-button flex items-center gap-2 ${msg.uiTab === 'answer' ? 'active' : ''}`}
+                            >
+                              <Sparkles size={14} />
+                              Answer
+                            </button>
+                            <button 
+                              onClick={() => setMsgTab(msg.id, 'sources')}
+                              className={`tab-button flex items-center gap-2 ${msg.uiTab === 'sources' ? 'active' : ''}`}
+                            >
+                              <Layers size={14} />
+                              Sources
+                              <span className="ml-1 text-[10px] bg-gray-100 px-1 rounded text-gray-400">
+                                {msg.answer.evidence?.length || 0}
+                              </span>
+                            </button>
+
+                            {/* Confidence Indicator */}
+                            <div className="ml-auto flex items-center gap-2 pr-2">
+                              <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-full border border-gray-100">
+                                <ShieldCheck size={12} className={
+                                  msg.answer.confidence === 'high' ? 'text-green-500' :
+                                  msg.answer.confidence === 'medium' ? 'text-yellow-500' : 'text-red-500'
+                                } />
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">
+                                  {msg.answer.confidence} Confidence
                                 </span>
+                                <div className="w-12 h-1 bg-gray-200 rounded-full overflow-hidden ml-1">
+                                  <div 
+                                    className={`h-full ${
+                                      msg.answer.confidence === 'high' ? 'bg-green-500' :
+                                      msg.answer.confidence === 'medium' ? 'bg-yellow-500' : 'bg-red-500'
+                                    }`}
+                                    style={{ width: msg.answer.confidence === 'high' ? '100%' : msg.answer.confidence === 'medium' ? '60%' : '30%' }}
+                                  ></div>
+                                </div>
                               </div>
                             </div>
                           </div>
 
+                          {msg.uiTab === 'answer' ? (
+                            <div className="flex flex-col gap-6">
+                              <div className="min-h-[100px]">
+                                <FormattedAnswer content={msg.answer.answer} evidence={msg.answer.evidence} />
+                              </div>
+
+                              {/* Action Bar */}
+                              <div className="flex items-center justify-between pt-4 border-t border-gray-50">
+                                <div className="flex items-center gap-3 ml-auto">
+                                  <div className="flex items-center gap-1">
+                                    <div className="flex -space-x-1">
+                                      {msg.answer.evidence?.slice(0, 3).map((_, i) => (
+                                        <div key={i} className="w-5 h-5 rounded-full bg-perplexity-gray border-2 border-white flex items-center justify-center">
+                                          <FileText size={10} className="text-gray-400" />
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <span className="text-xs text-gray-500 font-medium">
+                                      {msg.answer.evidence?.length} sources
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                              {Array.isArray(msg.answer.evidence) && msg.answer.evidence.map((ev, i) => (
+                                <div key={i} className="p-4 bg-white border border-gray-200/60 rounded-2xl hover:border-perplexity-blue/30 hover:shadow-md transition-all group cursor-pointer">
+                                  <div className="flex items-start justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-6 h-6 rounded-lg bg-perplexity-gray flex items-center justify-center text-[10px] font-bold text-gray-500">
+                                        {i + 1}
+                                      </div>
+                                      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider truncate max-w-[120px]">
+                                        {ev.document}
+                                      </span>
+                                    </div>
+                                    <ExternalLink size={12} className="text-gray-300 group-hover:text-perplexity-blue transition-colors" />
+                                  </div>
+                                  <h4 className="text-xs font-semibold text-gray-800 mb-2 line-clamp-1">
+                                    Page {ev.page || '1'} · Section {i + 1}
+                                  </h4>
+                                  <p className="text-[11px] leading-relaxed text-gray-500 line-clamp-3 italic">
+                                    "{ev.snippet}"
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
+
                     </div>
                   ))}
                 </div>

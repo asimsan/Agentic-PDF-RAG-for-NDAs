@@ -1,1 +1,72 @@
 @import "tailwindcss";
+
+@theme {
+  --color-perplexity-gray: #f3f3ee;
+  --color-perplexity-blue: #00a9e0;
+  --font-serif: "Ibarra Real Nova", serif;
+}
+
+@layer base {
+  body {
+    @apply bg-[#fdfdfc] text-gray-900 antialiased;
+  }
+  
+  h1, h2, h3, h4 {
+    @apply tracking-tight font-semibold;
+  }
+}
+
+@layer components {
+  .perplexity-card {
+    @apply bg-white border border-gray-200/60 shadow-sm rounded-3xl transition-all duration-300;
+  }
+
+  .citation-pill {
+    @apply inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded-md bg-gray-100/80 hover:bg-gray-200 text-[10px] font-medium text-gray-500 cursor-pointer transition-colors align-middle leading-none;
+  }
+
+  .action-icon {
+    @apply p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-all cursor-pointer;
+  }
+
+  .tab-button {
+    @apply px-4 py-2 text-sm font-medium transition-all relative border-b-2 border-transparent;
+  }
+
+  .tab-button.active {
+    @apply text-gray-900 border-gray-900;
+  }
+
+  .tab-button:not(.active) {
+    @apply text-gray-400 hover:text-gray-600;
+  }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 10px;
+}
+
+.markdown-body {
+  @apply text-[17px] leading-[1.6] text-gray-800 font-sans;
+}
+
+.inline-markdown p {
+  @apply inline;
+}
+
+.markdown-body h1 { @apply text-2xl mb-4 mt-6; }
+.markdown-body h2 { @apply text-xl mb-3 mt-5; }
+.markdown-body h3 { @apply text-lg mb-2 mt-4; }
+.markdown-body p { @apply mb-4; }
+.markdown-body ul { @apply list-disc pl-5 mb-4 space-y-1; }
+.markdown-body strong { @apply text-gray-900 font-bold; }
+.markdown-body blockquote { @apply border-l-4 border-blue-500 pl-4 py-1 bg-blue-50/50 my-4 rounded-r-lg italic text-blue-900; }

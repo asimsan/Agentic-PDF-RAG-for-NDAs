@@ -5,6 +5,64 @@ import { getEmbeddings, getBatchEmbeddings } from "./openai.js";
 import { vectorStore } from "./store.js";
 import { Chunk, IngestionStatus } from "./types.js";
 
+/**
+ * Robustly splits text into chunks using a hierarchy of separators
+ * to maintain semantic context, with support for overlap.
+ */
+function recursiveSplitText(text: string, chunkSize: number = 1200, chunkOverlap: number = 150): string[] {
+  const separators = ["\n\n", "\n", ". ", " ", ""];
+  
+  function split(content: string, separatorIdx: number): string[] {
+    if (content.length <= chunkSize) return [content];
+    if (separatorIdx >= separators.length) return [content];
+
+    const sep = separators[separatorIdx];
+    const parts = content.split(sep);
+    const chunks: string[] = [];
+    let currentChunk = "";
+
+    for (let part of parts) {
+      const potentialChunk = currentChunk ? currentChunk + sep + part : part;
+      if (potentialChunk.length <= chunkSize) {
+        currentChunk = potentialChunk;
+      } else {
+        if (currentChunk) chunks.push(currentChunk);
+        
+        if (part.length > chunkSize) {
+           const subParts = split(part, separatorIdx + 1);
+           if (subParts.length > 0) {
+             chunks.push(...subParts.slice(0, -1));
+             currentChunk = subParts[subParts.length - 1];
+           } else {
+             currentChunk = "";
+           }
+        } else {
+           currentChunk = part;
+        }
+      }
+    }
+    if (currentChunk) chunks.push(currentChunk);
+    return chunks;
+  }
+
+  const rawChunks = split(text, 0);
+  
+  // Apply overlap logic
+  const chunksWithOverlap: string[] = [];
+  for (let i = 0; i < rawChunks.length; i++) {
+    let chunk = rawChunks[i];
+    if (i > 0) {
+      const prevChunk = rawChunks[i - 1];
+      // Take the last 'chunkOverlap' characters from the previous chunk
+      const overlapText = prevChunk.slice(-chunkOverlap);
+      chunk = `...${overlapText} ${chunk}`;
+    }
+    chunksWithOverlap.push(chunk.trim());
+  }
+
+  return chunksWithOverlap.filter(c => c.length > 40);
+}
+
 export const ALL_URLS = [
   "https://raw.githubusercontent.com/applicaai/kleister-nda/master/documents/00782839aac5f3edc5ddeaf9642d454b.pdf",
   "https://raw.githubusercontent.com/applicaai/kleister-nda/master/documents/00a1d238e37ac225b8045a97953e845d.pdf",
@@ -96,52 +154,71 @@ export async function ingestDocuments(urls: string[] = ALL_URLS) {
   try {
     for (const url of urls) {
       console.log(`Processing ${url}...`);
-      let text = "";
+      let pages: string[] = [];
       let docId = url.split('/').pop() || 'unknown';
+      
       try {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.statusText}`);
         const buffer = await response.arrayBuffer();
-        const data = await pdf(Buffer.from(buffer));
-        text = data.text;
+        
+        // pdf-parse usage for page-by-page extraction
+        const capturedPages: string[] = [];
+        const data = await pdf(Buffer.from(buffer), {
+          pagerender: (pageData: any) => {
+            return pageData.getTextContent().then((textContent: any) => {
+              const pageText = textContent.items.map((item: any) => item.str).join(" ");
+              capturedPages.push(pageText);
+              return pageText;
+            });
+          }
+        });
+
+        pages = capturedPages;
+        if (pages.length === 0) {
+          // Fallback if pagerender didn't populate for some reason
+          pages = data.text.split(/\f/).filter(p => p.trim().length > 0);
+          if (pages.length <= 1) pages = [data.text];
+        }
       } catch (err) {
         console.warn(`Failed to fetch PDF, falling back to mock NDA data: ${err}`);
-        text = MOCK_NDA_TEXT;
+        pages = [MOCK_NDA_TEXT];
         docId = 'Mock_NDA_001.pdf';
       }
 
-      // Basic chunking by paragraph (or fixed length)
-      const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 30);
-
       const newChunks: Chunk[] = [];
-      try {
-        const batchSize = 100;
-        for (let b = 0; b < paragraphs.length; b += batchSize) {
-          const batch = paragraphs.slice(b, b + batchSize);
+      let chunkCounter = 0;
+
+      for (let pIdx = 0; pIdx < pages.length; pIdx++) {
+        const pageText = pages[pIdx];
+        const pageNum = pIdx + 1;
+        
+        // Use the new Recursive Splitter instead of simple paragraph split
+        const chunksForPage = recursiveSplitText(pageText, 1200, 150);
+
+        const batchSize = 30; // Processing embeddings in batches
+        for (let b = 0; b < chunksForPage.length; b += batchSize) {
+          const batch = chunksForPage.slice(b, b + batchSize);
           const batchTexts = batch.map(p => p.trim());
 
           try {
             const embeddings = await getBatchEmbeddings(batchTexts);
             for (let i = 0; i < batch.length; i++) {
               newChunks.push({
-                chunk_id: `${docId}_c${b + i}`,
+                chunk_id: `${docId}_p${pageNum}_c${chunkCounter++}`,
                 document_id: docId,
-                page: 1, // pdf-parse doesn't easily give page numbers for chunks without more complex logic
+                page: pageNum,
                 text: batchTexts[i],
                 metadata: { url },
                 embedding: embeddings[i]
               });
             }
           } catch (embedError) {
-            console.error("Embedding failed for batch starting at:", b, embedError);
+            console.error(`Embedding failed for ${docId} page ${pageNum}:`, embedError);
             throw embedError;
           }
-
-          // Throttling: Wait 0.5 second between batches to avoid 100 RPM free tier limits across multiple docs/batches
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, 200)); // Throttling
         }
-      } catch (error) {
-        throw error;
       }
 
       vectorStore.addChunks(newChunks);

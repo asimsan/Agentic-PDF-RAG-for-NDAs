@@ -102,8 +102,13 @@ const answerNode = async (state: typeof AgentState.State) => {
     ? `\n\nValidation Note: The retrieval system flagged the following potential gaps in context: "${state.lastValidation.missing_info}". \nIf this missing info is crucial, caveat your answer and assign a "medium" or "low" confidence score.`
     : "";
 
-  const prompt = `Answer the user's question using ONLY the provided document chunks. 
-Cite your sources by including the chunk_id in brackets like [doc_c1].
+  const prompt = `Answer the user's question using the provided document chunks. 
+Use Markdown for formatting:
+- Use **bold** for key terms and party names.
+- Use bullet points for lists.
+- Use # or ## for clear section headers.
+- Cite your sources by including the chunk_id in brackets like [doc_c1] IMMEDIATELY after the sentence it supports.
+
 Distinguish between directly supported facts, reasonable inferences, and missing information.${validationNote}
 
 Question: ${state.queries[state.queries.length - 1]}
@@ -113,7 +118,7 @@ ${context}
 
 Respond in JSON format:
 {
-  "answer": "your grounded answer here",
+  "answer": "your markdown grounded answer here",
   "confidence": "high" | "medium" | "low",
   "evidence": [
     {
@@ -137,6 +142,63 @@ Respond in JSON format:
   return { answer: finalAnswer };
 };
 
+const validateAnswerNode = async (state: typeof AgentState.State) => {
+  console.log("--- Executing validate_answer node ---");
+  const model = getModel();
+  const context = state.chunks.map(c => `[${c.chunk_id}]: ${c.text}`).join("\n\n");
+  const answer = state.answer?.answer;
+
+  const prompt = `You are a professional fact-checker for a RAG system.
+Review the generated answer against the source chunks.
+
+Rules:
+1. "Directly supported facts" MUST match the chunks or be close paraphrases.
+2. "Reasonable inferences" ARE ALLOWED if they are logical deductions from the provided text.
+3. "Hallucinations" are claims that FLATLY CONTRADICT the chunks or introduce major external knowledge not found in the documents.
+
+Answer: ${answer}
+
+Chunks:
+${context}
+
+Respond in JSON format:
+{
+  "grounded": boolean, // Set to false ONLY if there is a flat contradiction or major external hallucination.
+  "issues": "description of any hallucinations",
+  "reasoning": "your reasoning"
+}`;
+
+  const responseText = await model.generate(prompt);
+  const jsonStr = responseText.replace(/```json|```/g, "").trim();
+  const validation = JSON.parse(jsonStr);
+
+  const step: TraceStep = {
+    step: state.trace.length + 1,
+    action: "validate_answer",
+    output: validation,
+    result: validation.grounded ? "Fully Grounded" : "Hallucination Detected"
+  };
+
+  let updatedAnswer = state.answer;
+  if (!validation.grounded && updatedAnswer) {
+    updatedAnswer = {
+      ...updatedAnswer,
+      confidence: "low",
+      answer: `[FACT-CHECK WARNING: Some claims may not be fully grounded] \n\n ${updatedAnswer.answer}`,
+      self_correction: [...updatedAnswer.self_correction, step]
+    };
+  } else if (updatedAnswer) {
+     updatedAnswer = {
+      ...updatedAnswer,
+      self_correction: [...updatedAnswer.self_correction, step]
+    };
+  }
+
+  console.log("--- validate_answer grounding result:", validation.grounded);
+
+  return { answer: updatedAnswer, trace: [step] };
+};
+
 // Define the flow
 const afterValidate = (state: typeof AgentState.State) => {
   if (state.lastValidation?.sufficient) return "generate_answer";
@@ -149,11 +211,13 @@ const workflow = new StateGraph(AgentState)
   .addNode("validate", validateNode)
   .addNode("rewrite", rewriteNode)
   .addNode("generate_answer", answerNode)
+  .addNode("validate_answer", validateAnswerNode)
   .addEdge(START, "retrieve")
   .addEdge("retrieve", "validate")
   .addConditionalEdges("validate", afterValidate)
   .addEdge("rewrite", "retrieve")
-  .addEdge("generate_answer", END);
+  .addEdge("generate_answer", "validate_answer")
+  .addEdge("validate_answer", END);
 
 export const app = workflow.compile();
 
