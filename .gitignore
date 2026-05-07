@@ -11,3 +11,7 @@ coverage/
 test_*.ts
 test_*.js
 scratch/
+
+# Documentation artifacts
+PLAN_ALIGNMENT_GAP_ANALYSIS.md
+ACCEPTANCE_CRITERIA.md
