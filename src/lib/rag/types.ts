@@ -33,6 +33,7 @@ export interface AnswerPayload {
     page: number;
     chunk_id: string;
     snippet: string;
+    score?: number;
   }[];
   self_correction: TraceStep[];
 }

@@ -39,7 +39,7 @@ export const getModel = (modelName: string = "gpt-5.4-mini") => {
         messages: [{ role: "user", content: input }],
       });
 
-      return response.choices[0].message.content || "";
+      return response.choices[0]?.message?.content || "";
     },
   };
 };

@@ -514,7 +514,18 @@ export default function App() {
                                         {ev.document}
                                       </span>
                                     </div>
-                                    <ExternalLink size={12} className="text-gray-300 group-hover:text-perplexity-blue transition-colors" />
+                                    <div className="flex items-center gap-1.5">
+                                      {ev.score !== undefined && (
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                                          ev.score >= 0.8 ? 'bg-green-50 text-green-600' :
+                                          ev.score >= 0.6 ? 'bg-yellow-50 text-yellow-600' :
+                                          'bg-gray-100 text-gray-400'
+                                        }`}>
+                                          {Math.round(ev.score * 100)}%
+                                        </span>
+                                      )}
+                                      <ExternalLink size={12} className="text-gray-300 group-hover:text-perplexity-blue transition-colors" />
+                                    </div>
                                   </div>
                                   <h4 className="text-xs font-semibold text-gray-800 mb-2 line-clamp-1">
                                     Page {ev.page || '1'} · Section {i + 1}

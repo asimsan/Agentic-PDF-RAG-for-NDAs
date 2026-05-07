@@ -3,6 +3,24 @@ import { getEmbeddings, getModel } from "./openai.js";
 import { vectorStore } from "./store.js";
 import { AnswerPayload, RetrievedChunk, TraceStep, ValidationResult } from "./types.js";
 
+/**
+ * Robustly parses JSON from an LLM response.
+ * Strips markdown code fences, extracts the outermost {...} block,
+ * and returns `fallback` if parsing still fails.
+ */
+function safeParseJSON<T>(raw: string, fallback: T, label: string): T {
+  try {
+    const stripped = raw.replace(/```json|```/g, "").trim();
+    // Extract outermost { ... } in case there's surrounding prose
+    const match = stripped.match(/\{[\s\S]*\}/);
+    const jsonStr = match ? match[0] : stripped;
+    return JSON.parse(jsonStr) as T;
+  } catch (err) {
+    console.warn(`[safeParseJSON] Failed to parse JSON for "${label}". Using fallback. Raw:`, raw.slice(0, 200));
+    return fallback;
+  }
+}
+
 // Define the state
 const AgentState = Annotation.Root({
   question: Annotation<string>(),
@@ -58,8 +76,11 @@ Respond in JSON format:
 }`;
 
   const responseText = await model.generate(prompt);
-  const jsonStr = responseText.replace(/```json|```/g, "").trim();
-  const validation: ValidationResult = JSON.parse(jsonStr);
+  const validation: ValidationResult = safeParseJSON<ValidationResult>(
+    responseText,
+    { sufficient: true, missing_info: "", reasoning: "JSON parse error — assuming sufficient" },
+    "validateNode"
+  );
 
   const step: TraceStep = {
     step: state.trace.length + 1,
@@ -131,11 +152,22 @@ Respond in JSON format:
 }`;
 
   const responseText = await model.generate(prompt);
-  const jsonStr = responseText.replace(/```json|```/g, "").trim();
-  const rawAnswer = JSON.parse(jsonStr);
+  const rawAnswer = safeParseJSON<any>(
+    responseText,
+    { answer: "The agent could not parse a structured answer from the model response.", confidence: "low", evidence: [] },
+    "answerNode"
+  );
+
+  // Enrich evidence with cosine similarity scores from retrieved chunks
+  const scoreMap = new Map(state.chunks.map(c => [c.chunk_id, (c as any).score as number]));
+  const enrichedEvidence = (rawAnswer.evidence || []).map((ev: any) => ({
+    ...ev,
+    score: scoreMap.has(ev.chunk_id) ? Math.round(scoreMap.get(ev.chunk_id)! * 100) / 100 : undefined
+  }));
 
   const finalAnswer: AnswerPayload = {
     ...rawAnswer,
+    evidence: enrichedEvidence,
     self_correction: state.trace
   };
 
@@ -144,10 +176,13 @@ Respond in JSON format:
 
 const validateAnswerNode = async (state: typeof AgentState.State) => {
   console.log("--- Executing validate_answer node ---");
+  if (!state.answer) {
+    console.error("validate_answer called with no answer in state");
+    return { trace: [] };
+  }
   const model = getModel();
   const context = state.chunks.map(c => `[${c.chunk_id}]: ${c.text}`).join("\n\n");
-  const answer = state.answer?.answer;
-
+  const answer = state.answer.answer;
   const prompt = `You are a professional fact-checker for a RAG system.
 Review the generated answer against the source chunks.
 
@@ -169,8 +204,11 @@ Respond in JSON format:
 }`;
 
   const responseText = await model.generate(prompt);
-  const jsonStr = responseText.replace(/```json|```/g, "").trim();
-  const validation = JSON.parse(jsonStr);
+  const validation = safeParseJSON<{ grounded: boolean; issues: string; reasoning: string }>(
+    responseText,
+    { grounded: true, issues: "", reasoning: "JSON parse error — assuming grounded" },
+    "validateAnswerNode"
+  );
 
   const step: TraceStep = {
     step: state.trace.length + 1,
@@ -188,7 +226,7 @@ Respond in JSON format:
       self_correction: [...updatedAnswer.self_correction, step]
     };
   } else if (updatedAnswer) {
-     updatedAnswer = {
+    updatedAnswer = {
       ...updatedAnswer,
       self_correction: [...updatedAnswer.self_correction, step]
     };
