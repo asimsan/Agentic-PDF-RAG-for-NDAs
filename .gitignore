@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Test & debug scripts
+test_*.ts
+test_*.js
+scratch/
